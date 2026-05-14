@@ -13,10 +13,10 @@ type Trend = {
 }
 
 const COLUMNS = [
-  { id: 'hot', label: '🔥 HOT', color: '#d4523a' },
-  { id: 'rising', label: '📈 RISING', color: '#4a7c6b' },
-  { id: 'watch', label: '👀 WATCH', color: '#c48b3c' },
-  { id: 'archive', label: '📁 ARCHIVE', color: '#888' },
+  { id: 'hot', label: '🔥 HOT', color: '#d4523a', desc: '현재 최고 반응' },
+  { id: 'rising', label: '📈 RISING', color: '#4a7c6b', desc: '빠른 성장세' },
+  { id: 'watch', label: '👀 WATCH', color: '#c48b3c', desc: '초기 주목 필요' },
+  { id: 'archive', label: '📁 ARCHIVE', color: '#888', desc: '지난 트렌드 보관' },
 ]
 
 const PLATFORMS = ['인스타', '유튜브', 'X']
@@ -32,11 +32,26 @@ const DAILY_PROMPT = `오늘 날짜 기준으로 대한민국 SNS(인스타그�
 
 스테이폴리오(국내 감성숙소 큐레이션 플랫폼) 콘텐츠 마케터 시각으로 분석해줘.`
 
+function getWeekKey(dateStr: string) {
+  const d = new Date(dateStr)
+  const day = d.getDay()
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  const mon = new Date(d.setDate(diff))
+  return mon.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) + ' 주'
+}
+
+function isSameDay(a: string, b: Date) {
+  const da = new Date(a)
+  return da.getFullYear() === b.getFullYear() && da.getMonth() === b.getMonth() && da.getDate() === b.getDate()
+}
+
 export default function Home() {
   const [trends, setTrends] = useState<Trend[]>([])
   const [showModal, setShowModal] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [dateFilter, setDateFilter] = useState('today')
+  const [openWeeks, setOpenWeeks] = useState<string[]>([])
   const [form, setForm] = useState({
     keyword: '',
     description: '',
@@ -100,21 +115,49 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  function toggleWeek(week: string) {
+    setOpenWeeks(w => w.includes(week) ? w.filter(x => x !== week) : [...w, week])
+  }
+
+  const today = new Date()
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7)
+
+  const filteredTrends = trends.filter(t => {
+    if (dateFilter === 'today') return isSameDay(t.created_at, today)
+    if (dateFilter === 'yesterday') return isSameDay(t.created_at, yesterday)
+    if (dateFilter === 'week') return new Date(t.created_at) >= weekAgo
+    return true
+  })
+
+  const weekGroups: { [week: string]: Trend[] } = {}
+  trends.forEach(t => {
+    const week = getWeekKey(t.created_at)
+    if (!weekGroups[week]) weekGroups[week] = []
+    weekGroups[week].push(t)
+  })
+
+  const DATE_FILTERS = [
+    { id: 'today', label: '오늘' },
+    { id: 'yesterday', label: '어제' },
+    { id: 'week', label: '이번 주' },
+    { id: 'all', label: '전체' },
+  ]
+
   return (
     <main style={{ padding: '20px', fontFamily: 'Noto Sans KR, sans-serif', background: '#f5f2ee', minHeight: '100vh' }}>
 
-      {/* 헤더 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h1 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>🏨 스테이폴리오 트렌드 보드</h1>
           <p style={{ fontSize: '12px', color: '#888', margin: '4px 0 0' }}>
-            {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} 기준
+            {today.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} 기준
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={() => setShowPrompt(!showPrompt)}
             style={{ padding: '8px 14px', background: showPrompt ? '#f0ece6' : 'white', border: '1px solid #e8e4de', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#6b6760' }}>
-            {showPrompt ? '📋 프롬프트 닫기' : '📋 오늘의 프롬프트'}
+            {showPrompt ? '📋 닫기' : '📋 오늘의 프롬프트'}
           </button>
           <button onClick={() => openModal('hot')}
             style={{ padding: '8px 14px', background: '#d4523a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
@@ -123,13 +166,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 프롬프트 메모란 */}
       {showPrompt && (
         <div style={{ background: 'white', border: '1px solid #e8e4de', borderRadius: '12px', padding: '16px 18px', marginBottom: '16px', borderLeft: '3px solid #d4523a' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1814' }}>📋 매일 아침 Claude에 붙여넣을 프롬프트</span>
+            <span style={{ fontSize: '13px', fontWeight: 700 }}>📋 매일 아침 Claude에 붙여넣을 프롬프트</span>
             <button onClick={copyPrompt}
-              style={{ padding: '5px 12px', background: copied ? '#4a7c6b' : '#d4523a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'background 0.2s' }}>
+              style={{ padding: '5px 12px', background: copied ? '#4a7c6b' : '#d4523a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>
               {copied ? '✓ 복사됨!' : '복사하기'}
             </button>
           </div>
@@ -142,22 +184,47 @@ export default function Home() {
         </div>
       )}
 
-      {/* 칸반 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+        {DATE_FILTERS.map(f => (
+          <button key={f.id} onClick={() => setDateFilter(f.id)}
+            style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid', fontSize: '12px', cursor: 'pointer', fontWeight: dateFilter === f.id ? 600 : 400,
+              borderColor: dateFilter === f.id ? '#d4523a' : '#e8e4de',
+              background: dateFilter === f.id ? '#d4523a' : 'white',
+              color: dateFilter === f.id ? 'white' : '#6b6760' }}>
+            {f.label}
+            <span style={{ marginLeft: '5px', fontSize: '11px', opacity: 0.8 }}>
+              {trends.filter(t => {
+                if (f.id === 'today') return isSameDay(t.created_at, today)
+                if (f.id === 'yesterday') return isSameDay(t.created_at, yesterday)
+                if (f.id === 'week') return new Date(t.created_at) >= weekAgo
+                return true
+              }).length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '32px' }}>
         {COLUMNS.map(col => {
-          const cards = trends.filter(t => t.status === col.id)
+          const cards = filteredTrends.filter(t => t.status === col.id)
           return (
             <div key={col.id} style={{ background: '#faf9f7', border: '1px solid #e8e4de', borderRadius: '12px', overflow: 'hidden' }}>
               <div style={{ padding: '12px 14px', borderBottom: '1px solid #f0ece6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 700, fontSize: '13px' }}>{col.label}</span>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '13px' }}>{col.label}</span>
+                  <div style={{ fontSize: '10px', color: '#c0bdb8', marginTop: '2px' }}>{col.desc}</div>
+                </div>
                 <span style={{ fontSize: '11px', color: '#aaa', background: '#f0ece6', borderRadius: '10px', padding: '1px 8px' }}>{cards.length}</span>
               </div>
               <div style={{ padding: '10px' }}>
+                {cards.length === 0 && (
+                  <p style={{ fontSize: '12px', color: '#ccc', textAlign: 'center', padding: '20px 0' }}>트렌드 없음</p>
+                )}
                 {cards.map(trend => (
                   <div key={trend.id} style={{ background: 'white', border: '1px solid #e8e4de', borderRadius: '8px', padding: '11px 12px', marginBottom: '8px', borderLeft: `3px solid ${col.color}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px' }}>{trend.keyword}</span>
-                      <span style={{ fontSize: '11px', color: '#aaa' }}>{trend.platforms?.join(' · ')}</span>
+                      <span style={{ fontSize: '10px', color: '#aaa' }}>{trend.platforms?.join(' · ')}</span>
                     </div>
                     {trend.description && (
                       <p style={{ fontSize: '12px', color: '#6b6760', margin: '0 0 7px', lineHeight: 1.6 }}>{trend.description}</p>
@@ -193,7 +260,59 @@ export default function Home() {
         })}
       </div>
 
-      {/* 모달 */}
+      <div style={{ borderTop: '2px solid #e8e4de', paddingTop: '24px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '14px', color: '#1a1814' }}>📅 주간 트렌드 아카이브</h2>
+        {Object.keys(weekGroups).length === 0 && (
+          <p style={{ fontSize: '13px', color: '#aaa', textAlign: 'center', padding: '30px 0' }}>아직 아카이브된 트렌드가 없어요</p>
+        )}
+        {Object.entries(weekGroups).map(([week, items]) => {
+          const isOpen = openWeeks.includes(week)
+          const hotItems = items.filter(t => t.status === 'hot')
+          const risingItems = items.filter(t => t.status === 'rising')
+          return (
+            <div key={week} style={{ background: 'white', border: '1px solid #e8e4de', borderRadius: '12px', marginBottom: '10px', overflow: 'hidden' }}>
+              <button onClick={() => toggleWeek(week)}
+                style={{ width: '100%', padding: '14px 18px', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1814' }}>📅 {week}</span>
+                  <span style={{ fontSize: '11px', color: '#aaa' }}>총 {items.length}개</span>
+                  {hotItems.length > 0 && (
+                    <span style={{ fontSize: '11px', background: '#fdf0ed', color: '#d4523a', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>🔥 {hotItems.length}</span>
+                  )}
+                  {risingItems.length > 0 && (
+                    <span style={{ fontSize: '11px', background: '#edf5f2', color: '#4a7c6b', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>📈 {risingItems.length}</span>
+                  )}
+                </div>
+                <span style={{ fontSize: '14px', color: '#aaa' }}>{isOpen ? '▲' : '▼'}</span>
+              </button>
+              {isOpen && (
+                <div style={{ padding: '0 18px 16px', borderTop: '1px solid #f0ece6' }}>
+                  {COLUMNS.map(col => {
+                    const colItems = items.filter(t => t.status === col.id)
+                    if (colItems.length === 0) return null
+                    return (
+                      <div key={col.id} style={{ marginTop: '14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: col.color, marginBottom: '8px' }}>{col.label}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {colItems.map(t => (
+                            <div key={t.id} style={{ background: '#faf9f7', border: '1px solid #e8e4de', borderRadius: '8px', padding: '7px 10px', fontSize: '12px', borderLeft: `2px solid ${col.color}` }}>
+                              <div style={{ fontWeight: 700, color: '#1a1814', marginBottom: '2px' }}>{t.keyword}</div>
+                              {t.platforms?.length > 0 && (
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>{t.platforms.join(' · ')}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
           onClick={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
