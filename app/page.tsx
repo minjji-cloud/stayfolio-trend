@@ -21,10 +21,22 @@ const COLUMNS = [
 
 const PLATFORMS = ['인스타', '유튜브', 'X']
 
+const DAILY_PROMPT = `오늘 날짜 기준으로 대한민국 SNS(인스타그램, 유튜브, X)에서
+여행·숙박·숙소 관련 주목할 만한 트렌드 키워드 8개를 뽑아줘.
+
+각 키워드마다 아래 형식으로 정리해줘:
+- 키워드: #키워드명
+- 플랫폼: 인스타/유튜브/X
+- 상태: HOT 또는 RISING 또는 WATCH
+- 설명: 2줄 이내로 왜 주목해야 하는지
+
+스테이폴리오(국내 감성숙소 큐레이션 플랫폼) 콘텐츠 마케터 시각으로 분석해줘.`
+
 export default function Home() {
   const [trends, setTrends] = useState<Trend[]>([])
   const [showModal, setShowModal] = useState(false)
-  const [targetCol, setTargetCol] = useState('watch')
+  const [showPrompt, setShowPrompt] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [form, setForm] = useState({
     keyword: '',
     description: '',
@@ -44,7 +56,6 @@ export default function Home() {
   }
 
   function openModal(col: string) {
-    setTargetCol(col)
     setForm({ keyword: '', description: '', status: col, platforms: [], tags: '' })
     setShowModal(true)
   }
@@ -83,22 +94,53 @@ export default function Home() {
     }))
   }
 
+  function copyPrompt() {
+    navigator.clipboard.writeText(DAILY_PROMPT)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <main style={{ padding: '20px', fontFamily: 'Noto Sans KR, sans-serif', background: '#f5f2ee', minHeight: '100vh' }}>
 
       {/* 헤더 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
           <h1 style={{ fontSize: '18px', fontWeight: 700, margin: 0 }}>🏨 스테이폴리오 트렌드 보드</h1>
           <p style={{ fontSize: '12px', color: '#888', margin: '4px 0 0' }}>
             {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })} 기준
           </p>
         </div>
-        <button onClick={() => openModal('hot')}
-          style={{ padding: '8px 16px', background: '#d4523a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
-          + 트렌드 추가
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => setShowPrompt(!showPrompt)}
+            style={{ padding: '8px 14px', background: showPrompt ? '#f0ece6' : 'white', border: '1px solid #e8e4de', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', color: '#6b6760' }}>
+            {showPrompt ? '📋 프롬프트 닫기' : '📋 오늘의 프롬프트'}
+          </button>
+          <button onClick={() => openModal('hot')}
+            style={{ padding: '8px 14px', background: '#d4523a', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+            + 트렌드 추가
+          </button>
+        </div>
       </div>
+
+      {/* 프롬프트 메모란 */}
+      {showPrompt && (
+        <div style={{ background: 'white', border: '1px solid #e8e4de', borderRadius: '12px', padding: '16px 18px', marginBottom: '16px', borderLeft: '3px solid #d4523a' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#1a1814' }}>📋 매일 아침 Claude에 붙여넣을 프롬프트</span>
+            <button onClick={copyPrompt}
+              style={{ padding: '5px 12px', background: copied ? '#4a7c6b' : '#d4523a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'background 0.2s' }}>
+              {copied ? '✓ 복사됨!' : '복사하기'}
+            </button>
+          </div>
+          <pre style={{ margin: 0, fontSize: '12px', color: '#6b6760', lineHeight: 1.7, whiteSpace: 'pre-wrap', background: '#faf9f7', padding: '12px', borderRadius: '8px', border: '1px solid #f0ece6' }}>
+            {DAILY_PROMPT}
+          </pre>
+          <p style={{ margin: '10px 0 0', fontSize: '11px', color: '#aaa' }}>
+            💡 복사 후 claude.ai 채팅창에 붙여넣으면 트렌드 8개를 뽑아줘요
+          </p>
+        </div>
+      )}
 
       {/* 칸반 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
@@ -113,21 +155,13 @@ export default function Home() {
               <div style={{ padding: '10px' }}>
                 {cards.map(trend => (
                   <div key={trend.id} style={{ background: 'white', border: '1px solid #e8e4de', borderRadius: '8px', padding: '11px 12px', marginBottom: '8px', borderLeft: `3px solid ${col.color}` }}>
-
-                    {/* 키워드 + 플랫폼 */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px' }}>{trend.keyword}</span>
-                      <span style={{ fontSize: '11px', color: '#aaa' }}>
-                        {trend.platforms?.join(' · ')}
-                      </span>
+                      <span style={{ fontSize: '11px', color: '#aaa' }}>{trend.platforms?.join(' · ')}</span>
                     </div>
-
-                    {/* 설명 */}
                     {trend.description && (
                       <p style={{ fontSize: '12px', color: '#6b6760', margin: '0 0 7px', lineHeight: 1.6 }}>{trend.description}</p>
                     )}
-
-                    {/* 태그 */}
                     {trend.tags?.length > 0 && (
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
                         {trend.tags.map(tag => (
@@ -135,8 +169,6 @@ export default function Home() {
                         ))}
                       </div>
                     )}
-
-                    {/* 이동 버튼 */}
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                       {COLUMNS.filter(c => c.id !== col.id).map(c => (
                         <button key={c.id} onClick={() => moveCard(trend.id, c.id)}
